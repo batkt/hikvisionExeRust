@@ -12,6 +12,7 @@ use once_cell::sync::Lazy;
 use reqwest::Method;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -24,6 +25,14 @@ const TOKENS: [&str; 4] = ["plate", "YYYY-MM-DD", "hh-mm-ss", "expireRemind"];
 const MAX_CUSTOM_LEN: usize = 40;
 /// capabilities: ShowInfo id maxSize = 4
 const MAX_LINES: usize = 4;
+
+/// Үүнээс урт мөрийг гүйдэг ("left") горимоор харуулна. `instant` горимд самбарын өргөнөөс
+/// урт текстийг контроллер хуудаслаж харуулдаг тул нөгөө мөр заримдаа хоосон харагддаг.
+static SCROLL_CHARS: AtomicUsize = AtomicUsize::new(8);
+
+pub fn set_scroll_chars(n: usize) {
+    SCROLL_CHARS.store(n, Ordering::Relaxed);
+}
 
 /// IP бүрийн сүүлийн хүсэлтийн дугаар — шинэ текст ирвэл өмнөх сэргээлтийг цуцална
 static GENERATION: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -143,6 +152,7 @@ fn apply_lines(cfg: &mut Value, lines: &[String]) -> Result<()> {
                 .cloned()
                 .unwrap_or_else(|| template.clone());
             info["id"]           = json!(i + 1);
+            info["displayMode"]  = json!(display_mode(line));
             info["LineInfoList"] = json!([{ "LineInfo": line_info(line) }]);
             json!({ "ShowInfo": info })
         })
@@ -150,6 +160,19 @@ fn apply_lines(cfg: &mut Value, lines: &[String]) -> Result<()> {
 
     *show_list = new_list;
     Ok(())
+}
+
+/// Самбарт харагдах тэмдэгтийн тоогоор гүйлгэх эсэхийг шийднэ
+fn display_mode(line: &str) -> &'static str {
+    let line = line.trim();
+    let shown = match line {
+        "YYYY-MM-DD"   => 10,
+        "hh-mm-ss"     => 8,
+        "plate"        => 8,
+        "expireRemind" => usize::MAX,
+        _              => line.chars().count(),
+    };
+    if shown > SCROLL_CHARS.load(Ordering::Relaxed) { "left" } else { "instant" }
 }
 
 fn line_info(line: &str) -> Value {
@@ -180,5 +203,14 @@ mod tests {
         assert_eq!(list[2]["ShowInfo"]["fontColor"], "green"); // эхний мөрийн загвар
         assert_eq!(list[2]["ShowInfo"]["id"], 3);
         assert_eq!(cfg["SingleSceneLEDConfigurations"]["mode"], "noVehicle");
+        assert_eq!(list[0]["ShowInfo"]["displayMode"], "instant"); // 9117УБӨ = 7 тэмдэгт
+    }
+
+    #[test]
+    fn long_lines_scroll() {
+        assert_eq!(display_mode("Тавтай морил"), "left");
+        assert_eq!(display_mode("YYYY-MM-DD"), "left");
+        assert_eq!(display_mode("55T"), "instant");
+        assert_eq!(display_mode("hh-mm-ss"), "instant");
     }
 }

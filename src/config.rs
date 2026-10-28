@@ -15,11 +15,15 @@ pub struct Config {
     /// /api/sambar-аар гаргасан текстийг хэдэн секунд барьсны дараа idle руу буцаах
     #[serde(default = "default_sambar_hold_secs")]
     pub sambar_hold_secs: u64,
+    /// LED мөр үүнээс олон тэмдэгттэй бол гүйдэг горимоор харуулна (64px өргөн самбар ≈ 8 тэмдэгт)
+    #[serde(default = "default_sambar_scroll_chars")]
+    pub sambar_scroll_chars: usize,
 }
 
 fn default_port() -> u16 { 5000 }
 fn default_sambar_idle() -> Vec<String> { vec!["Тавтай морил".into(), "YYYY-MM-DD".into()] }
 fn default_sambar_hold_secs() -> u64 { 20 }
+fn default_sambar_scroll_chars() -> usize { 8 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {
@@ -51,6 +55,12 @@ pub struct CameraEntry {
 
 fn default_http_port() -> u16 { 80 }
 fn default_true() -> bool { true }
+
+impl CameraEntry {
+    pub fn is_exit(&self) -> bool {
+        self.role.as_deref().is_some_and(|r| r.eq_ignore_ascii_case("exit"))
+    }
+}
 fn default_username() -> String { "admin".to_string() }
 
 /// config.toml-г exe-ийн хавтаснаас, байхгүй бол exe-ийн хажуугийн dlls/ хавтаснаас хайна.

@@ -121,6 +121,8 @@ async fn run_app(cfg: config::Config) -> Result<()> {
     info!("Hikvision Service эхэлж байна...");
     info!("{} камер тохируулагдсан", cfg.cameras.len());
 
+    led_isapi::set_scroll_chars(cfg.sambar_scroll_chars);
+
     let (tx, rx) = mpsc::channel::<plate_service::PlateEvent>(200);
 
     for camera in cfg.cameras.clone() {

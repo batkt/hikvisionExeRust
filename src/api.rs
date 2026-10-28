@@ -89,6 +89,9 @@ async fn sambar(
     Path((ip, text, dun)): Path<(String, String, String)>,
 ) -> (StatusCode, String) {
     info!("Самбар: {} / {} / {}", ip, text, dun);
+    let is_exit = st.config.cameras.iter().any(|c| c.ip == ip && c.is_exit());
+    // Гарах камер: төлбөрийн дүнг "55" → "55T" болгож харуулна
+    let dun = if is_exit { with_tugrug(&dun) } else { dun };
     show_on_led(&st, &ip, vec![text, dun]).await
 }
 
@@ -97,7 +100,30 @@ async fn sambar_ognootoi(
     Path((ip, text, dun, start, end)): Path<(String, String, String, String, String)>,
 ) -> (StatusCode, String) {
     info!("СамбарОгноотой: {} / {} / {} / {} / {}", ip, text, dun, start, end);
-    show_on_led(&st, &ip, vec![text, dun, start, end]).await
+    show_on_led(&st, &ip, vec![text, with_tugrug(&dun), start, end]).await
+}
+
+/// Зөвхөн тоон дүнгийн ард "T" залгана ("55" → "55T"); "55T", "14:47:21" зэргийг хэвээр үлдээнэ
+fn with_tugrug(dun: &str) -> String {
+    let d = dun.trim();
+    let numeric = !d.is_empty()
+        && d.chars().any(|c| c.is_ascii_digit())
+        && d.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',');
+    if numeric { format!("{d}T") } else { d.to_string() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_tugrug;
+
+    #[test]
+    fn appends_tugrug_only_to_amounts() {
+        assert_eq!(with_tugrug("55"), "55T");
+        assert_eq!(with_tugrug("1,500"), "1,500T");
+        assert_eq!(with_tugrug("55T"), "55T");
+        assert_eq!(with_tugrug("14:47:21"), "14:47:21");
+        assert_eq!(with_tugrug(""), "");
+    }
 }
 
 /// `led_ip` тохируулсан бол тусдаа LED контроллер (vtLEDProtocol.dll), үгүй бол
